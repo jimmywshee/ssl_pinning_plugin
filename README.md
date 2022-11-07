@@ -21,6 +21,7 @@ For help on editing plugin code, view the [documentation](https://flutter.io/pla
 - sha : `SHA` enum [SHA.SHA1 || SHA.SHA256] * required
 - allowedSHAFingerprints : `List<String>` v
 - timeout : `int` * required
+- isProd : `boolean` default is true, change to false for ignore self-signed cert error
 
 ### Usage :
 
