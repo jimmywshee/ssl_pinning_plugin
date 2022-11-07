@@ -42,7 +42,8 @@ class _MyAppState extends State<MyApp> {
           httpMethod: httpMethod,
           sha: sha,
           allowedSHAFingerprints: allowedShA1FingerprintList,
-          timeout: timeout);
+          timeout: timeout,
+          isProd: false);
 
       // If the widget was removed from the tree while the asynchronous platform
       // message was in flight, we want to discard the reply rather than calling
@@ -52,15 +53,16 @@ class _MyAppState extends State<MyApp> {
       ScaffoldMessenger.of(scaffoldContext).showSnackBar(
         new SnackBar(
           content: new Text(checkMsg),
-          duration: Duration(seconds: 1),
+          duration: Duration(seconds: 5),
           backgroundColor: Colors.green,
         ),
       );
     } catch (e) {
+      print(e);
       ScaffoldMessenger.of(scaffoldContext).showSnackBar(
         new SnackBar(
           content: new Text(e.toString()),
-          duration: Duration(seconds: 1),
+          duration: Duration(seconds: 5),
           backgroundColor: Colors.red,
         ),
       );
@@ -95,7 +97,7 @@ class _MyAppState extends State<MyApp> {
                     children: <Widget>[
                       TextFormField(
                           keyboardType: TextInputType.url,
-                          initialValue: "https://flutter.dev/",
+                          initialValue: "https://192.168.1.6:8080/mbgw/api/test",
                           decoration: InputDecoration(
                             hintText: 'https://yourdomain.com',
                             labelText: 'URL',
@@ -148,7 +150,7 @@ class _MyAppState extends State<MyApp> {
                       TextFormField(
                           keyboardType: TextInputType.text,
                           initialValue:
-                              "9D B3 FC A9 17 36 04 27 A2 82 2F BD 06 95 F1 DC 0A 00 9F 72",
+                              "D1 A7 9E D9 82 3B 0A EF 7E 1C DC A2 C0 FA 3B 7E 21 C5 1B 09 EA 47 0C 30 A8 96 A9 E0 5B BD A4 3F",
                           decoration: InputDecoration(
                               hintText: 'OO OO OO OO OO OO OO OO OO OO',
                               labelText: 'Fingerprint'),

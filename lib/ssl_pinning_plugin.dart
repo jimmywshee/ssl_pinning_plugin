@@ -18,14 +18,16 @@ class SslPinningPlugin {
       Map<String, String>? headerHttp,
       required SHA sha,
       required List<String> allowedSHAFingerprints,
-      required int timeout}) async {
+      required int timeout,
+      bool isProd = true}) async {
     final Map<String, dynamic> params = <String, dynamic>{
       "url": serverURL,
       "httpMethod": httpMethod.toString().split(".").last,
       "headers": headerHttp ?? new Map(),
       "type": sha.toString().split(".").last,
       "fingerprints": allowedSHAFingerprints,
-      "timeout": timeout
+      "timeout": timeout,
+      "isProd": isProd
     };
 
     String resp = await _channel.invokeMethod('check', params);

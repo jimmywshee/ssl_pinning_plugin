@@ -26,6 +26,12 @@ import androidx.annotation.RequiresApi
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CompletionStage
 import java.util.concurrent.TimeUnit
+import javax.net.ssl.HostnameVerifier
+import javax.net.ssl.SSLContext
+import javax.net.ssl.TrustManager
+import javax.net.ssl.X509TrustManager
+import java.security.cert.X509Certificate
+import java.security.SecureRandom
 
 class SslPinningPlugin: MethodCallHandler, FlutterPlugin {
 
@@ -74,8 +80,9 @@ class SslPinningPlugin: MethodCallHandler, FlutterPlugin {
         val httpHeaderArgs: Map<String, String> = arguments.get("headers") as Map<String, String>
         val timeout: Int = arguments.get("timeout") as Int
         val type: String = arguments.get("type") as String
+        val isProd: Boolean = arguments.get("isProd") as Boolean
 
-        val get: Boolean = CompletableFuture.supplyAsync { this.checkConnexion(serverURL, allowedFingerprints, httpHeaderArgs, timeout, type, httpMethod) }.get()
+        val get: Boolean = CompletableFuture.supplyAsync { this.checkConnexion(serverURL, allowedFingerprints, httpHeaderArgs, timeout, type, httpMethod, isProd) }.get()
 
         if(get) {
             result.success("CONNECTION_SECURE")
@@ -86,17 +93,26 @@ class SslPinningPlugin: MethodCallHandler, FlutterPlugin {
     }
 
     @RequiresApi(Build.VERSION_CODES.N)
-    fun checkConnexion(serverURL: String, allowedFingerprints: List<String>, httpHeaderArgs: Map<String, String>, timeout: Int, type: String, httpMethod: String): Boolean {
-        val sha: String = this.getFingerprint(serverURL, timeout, httpHeaderArgs, type, httpMethod)
+    fun checkConnexion(serverURL: String, allowedFingerprints: List<String>, httpHeaderArgs: Map<String, String>, timeout: Int, type: String, httpMethod: String, isProd: Boolean): Boolean {
+        val sha: String = this.getFingerprint(serverURL, timeout, httpHeaderArgs, type, httpMethod, isProd)
         return allowedFingerprints.map { fp -> fp.toUpperCase().replace("\\s".toRegex(), "") }.contains(sha)
     }
 
     @RequiresApi(Build.VERSION_CODES.N)
     @Throws(IOException::class, NoSuchAlgorithmException::class, CertificateException::class, CertificateEncodingException::class)
-    private fun getFingerprint(httpsURL: String, connectTimeout: Int, httpHeaderArgs: Map<String, String>, type: String, httpMethod: String): String {
+    private fun getFingerprint(httpsURL: String, connectTimeout: Int, httpHeaderArgs: Map<String, String>, type: String, httpMethod: String, isProd: Boolean): String {
 
         val url = URL(httpsURL)
-        val httpClient: HttpsURLConnection = url.openConnection() as HttpsURLConnection
+        val httpClient: HttpsURLConnection;
+        if(isProd) {
+            httpClient = (url.openConnection() as HttpsURLConnection)
+        } else {
+            httpClient = (url.openConnection() as HttpsURLConnection).apply {
+                sslSocketFactory = createSocketFactory(listOf("TLSv1.2"))
+                hostnameVerifier = HostnameVerifier { _, _ -> true }
+                readTimeout = 5000
+            }
+        }
 
         if (httpMethod == "Head") httpClient.setRequestMethod("HEAD");
 
@@ -110,6 +126,16 @@ class SslPinningPlugin: MethodCallHandler, FlutterPlugin {
         return this.hashString(type, cert.getEncoded())
 
     }
+
+    private fun createSocketFactory(protocols: List<String>) =
+        SSLContext.getInstance(protocols[0]).apply {
+            val trustAllCerts = arrayOf<TrustManager>(object : X509TrustManager {
+                override fun getAcceptedIssuers(): Array<X509Certificate> = arrayOf()
+                override fun checkClientTrusted(certs: Array<X509Certificate>, authType: String) = Unit
+                override fun checkServerTrusted(certs: Array<X509Certificate>, authType: String) = Unit
+            })
+            init(null, trustAllCerts, SecureRandom())
+        }.socketFactory
 
     private fun hashString(type: String, input: ByteArray) =
             MessageDigest
