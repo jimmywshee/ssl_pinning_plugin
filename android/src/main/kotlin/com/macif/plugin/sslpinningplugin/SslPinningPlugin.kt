@@ -6,7 +6,6 @@ import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
-import io.flutter.plugin.common.PluginRegistry.Registrar
 
 import javax.net.ssl.HttpsURLConnection
 import javax.security.cert.CertificateException
@@ -45,15 +44,6 @@ class SslPinningPlugin: MethodCallHandler, FlutterPlugin {
 
         channel = MethodChannel(flutterPluginBinding.getFlutterEngine().getDartExecutor(), "ssl_pinning_plugin")
         channel.setMethodCallHandler(this);
-    }
-
-    companion object {
-        @JvmStatic
-        fun registerWith(registrar: Registrar){
-
-            val channel = MethodChannel(registrar.messenger(), "ssl_pinning_plugin")
-            channel.setMethodCallHandler(SslPinningPlugin())
-        }
     }
 
     @RequiresApi(Build.VERSION_CODES.N)
@@ -95,7 +85,7 @@ class SslPinningPlugin: MethodCallHandler, FlutterPlugin {
     @RequiresApi(Build.VERSION_CODES.N)
     fun checkConnexion(serverURL: String, allowedFingerprints: List<String>, httpHeaderArgs: Map<String, String>, timeout: Int, type: String, httpMethod: String, isProd: Boolean): Boolean {
         val sha: String = this.getFingerprint(serverURL, timeout, httpHeaderArgs, type, httpMethod, isProd)
-        return allowedFingerprints.map { fp -> fp.toUpperCase().replace("\\s".toRegex(), "") }.contains(sha)
+	return allowedFingerprints.map { fp -> fp.toUpperCase().replace("\\s".toRegex(), "") }.contains(sha)
     }
 
     @RequiresApi(Build.VERSION_CODES.N)
