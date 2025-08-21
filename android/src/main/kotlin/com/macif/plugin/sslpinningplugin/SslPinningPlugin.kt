@@ -1,53 +1,41 @@
 package com.macif.plugin.sslpinningplugin
 
+import android.net.http.X509TrustManagerExtensions
 import android.os.Build
+import androidx.annotation.RequiresApi
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
-
-import javax.net.ssl.HttpsURLConnection
-import javax.security.cert.CertificateException
-import java.io.IOException
-import java.text.ParseException
-
 import java.net.URL
+import java.security.KeyStore
 import java.security.MessageDigest
 import java.security.NoSuchAlgorithmException
-import java.security.cert.Certificate
-import java.security.cert.CertificateEncodingException
-
-import android.os.StrictMode
-
-import androidx.annotation.NonNull
-import androidx.annotation.RequiresApi
-import java.util.concurrent.CompletableFuture
-import java.util.concurrent.CompletionStage
-import java.util.concurrent.TimeUnit
-import javax.net.ssl.HostnameVerifier
-import javax.net.ssl.SSLContext
-import javax.net.ssl.TrustManager
-import javax.net.ssl.X509TrustManager
-import java.security.cert.X509Certificate
 import java.security.SecureRandom
+import java.security.cert.CertificateEncodingException
+import java.security.cert.X509Certificate
+import java.text.ParseException
+import java.util.concurrent.CompletableFuture
+import javax.net.ssl.HostnameVerifier
+import javax.net.ssl.HttpsURLConnection
+import javax.net.ssl.SSLContext
+import javax.net.ssl.SSLSocketFactory
+import javax.net.ssl.TrustManagerFactory
+import javax.net.ssl.X509TrustManager
+import javax.security.cert.CertificateException
 
-class SslPinningPlugin: MethodCallHandler, FlutterPlugin {
+class SslPinningPlugin : MethodCallHandler, FlutterPlugin {
 
-    /// The MethodChannel that will the communication between Flutter and native Android
-    ///
-    /// This local reference serves to register the plugin with the Flutter Engine and unregister it
-    /// when the Flutter Engine is detached from the Activity
-    private lateinit var channel : MethodChannel
+    private lateinit var channel: MethodChannel
 
-    override fun onAttachedToEngine(@NonNull flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
-
-        channel = MethodChannel(flutterPluginBinding.getFlutterEngine().getDartExecutor(), "ssl_pinning_plugin")
+    override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
+        channel = MethodChannel(flutterPluginBinding.binaryMessenger, "ssl_pinning_plugin")
         channel.setMethodCallHandler(this);
     }
 
     @RequiresApi(Build.VERSION_CODES.N)
-    override fun onMethodCall(@NonNull call: MethodCall, @NonNull result: Result) {
+    override fun onMethodCall(call: MethodCall, result: Result) {
         try {
             when (call.method) {
                 "check" -> handleCheckEvent(call, result)
@@ -56,86 +44,139 @@ class SslPinningPlugin: MethodCallHandler, FlutterPlugin {
         } catch (e: Exception) {
             result.error(e.toString(), "", "")
         }
-
     }
 
     @RequiresApi(Build.VERSION_CODES.N)
     @Throws(ParseException::class)
     private fun handleCheckEvent(call: MethodCall, result: Result) {
 
-        val arguments: HashMap<String, Any> = call.arguments as HashMap<String, Any>
-        val serverURL: String = arguments.get("url") as String
-        val allowedFingerprints: List<String> = arguments.get("fingerprints") as List<String>
-        val httpMethod: String = arguments.get("httpMethod") as String
-        val httpHeaderArgs: Map<String, String> = arguments.get("headers") as Map<String, String>
-        val timeout: Int = arguments.get("timeout") as Int
-        val type: String = arguments.get("type") as String
-        val isProd: Boolean = arguments.get("isProd") as Boolean
+        val arguments: Map<Any?, Any?> = HashMap(call.arguments as Map<*, *>)
+        val serverURL: String = arguments["url"] as String
+        val allowedFingerprints: List<String> =
+            ArrayList(arguments["fingerprints"] as List<*>).map { it.toString() }
+        val httpMethod: String = arguments["httpMethod"] as String
+        val httpHeaderArgs: Map<String, String> =
+            HashMap(arguments["headers"] as Map<*, *>).mapKeys { it.key.toString() }
+                .mapValues { it.value.toString() }
+        val type: String = arguments["type"] as String
+        val isProd: Boolean = arguments["isProd"] as Boolean
 
-        val get: Boolean = CompletableFuture.supplyAsync { this.checkConnexion(serverURL, allowedFingerprints, httpHeaderArgs, timeout, type, httpMethod, isProd) }.get()
+        val get: Boolean = CompletableFuture.supplyAsync {
+            this.checkConnexion(
+                serverURL, allowedFingerprints, httpHeaderArgs, type, httpMethod, isProd
+            )
+        }.get()
 
-        if(get) {
+        if (get) {
             result.success("CONNECTION_SECURE")
-        }else {
-            result.error("CONNECTION_NOT_SECURE", "Connection is not secure", "Fingerprint doesn't match")
+        } else {
+            result.error(
+                "CONNECTION_NOT_SECURE",
+                "Connection is not secure",
+                "Fingerprint doesn't match"
+            )
         }
 
     }
 
-    @RequiresApi(Build.VERSION_CODES.N)
-    fun checkConnexion(serverURL: String, allowedFingerprints: List<String>, httpHeaderArgs: Map<String, String>, timeout: Int, type: String, httpMethod: String, isProd: Boolean): Boolean {
-        val sha: String = this.getFingerprint(serverURL, timeout, httpHeaderArgs, type, httpMethod, isProd)
-	return allowedFingerprints.map { fp -> fp.toUpperCase().replace("\\s".toRegex(), "") }.contains(sha)
+    private fun checkConnexion(
+        serverURL: String,
+        allowedFingerprints: List<String>,
+        httpHeaderArgs: Map<String, String>,
+        algorithm: String,
+        httpMethod: String,
+        isProd: Boolean,
+    ): Boolean {
+        if (allowedFingerprints.isEmpty()) return false
+
+        val sha = this.getFingerprints(
+            serverURL, httpHeaderArgs, algorithm, httpMethod, isProd
+        )
+        val normalizedAllowedFingerprint = normalizeFingerprints(allowedFingerprints)
+        return normalizedAllowedFingerprint.any { sha.contains(it) }
     }
 
-    @RequiresApi(Build.VERSION_CODES.N)
-    @Throws(IOException::class, NoSuchAlgorithmException::class, CertificateException::class, CertificateEncodingException::class)
-    private fun getFingerprint(httpsURL: String, connectTimeout: Int, httpHeaderArgs: Map<String, String>, type: String, httpMethod: String, isProd: Boolean): String {
-
-        val url = URL(httpsURL)
-        val httpClient: HttpsURLConnection;
-        if(isProd) {
-            httpClient = (url.openConnection() as HttpsURLConnection)
-        } else {
-            httpClient = (url.openConnection() as HttpsURLConnection).apply {
+    private fun getFingerprints(
+        serverURL: String,
+        httpHeaderArgs: Map<String, String>,
+        algorithm: String,
+        httpMethod: String,
+        isProd: Boolean
+    ): Set<String> {
+        val url = URL(serverURL)
+        val conn = (url.openConnection() as HttpsURLConnection).apply {
+            if (!isProd) {
                 sslSocketFactory = createSocketFactory(listOf("TLSv1.2"))
                 hostnameVerifier = HostnameVerifier { _, _ -> true }
-                readTimeout = 5000
+            } else {
+                hostnameVerifier = HttpsURLConnection.getDefaultHostnameVerifier()
             }
+            if (httpMethod.equals("Head", ignoreCase = true)) {
+                requestMethod = "HEAD"
+            }
+            httpHeaderArgs.forEach { (k, v) -> setRequestProperty(k, v) }
         }
 
-        if (httpMethod == "Head") httpClient.setRequestMethod("HEAD");
+        conn.connect()
 
-        httpHeaderArgs.forEach { key, value -> httpClient.setRequestProperty(key, value) }
-        httpClient.connect()
-
-        val cert: Certificate = httpClient.getServerCertificates()[0] as Certificate
-
-        httpClient.disconnect()
-
-        return this.hashString(type, cert.getEncoded())
-
+        val peer = conn.serverCertificates.map { it as X509Certificate }
+        val peerFingerprints = peer.map { fingerprintHex(it, algorithm) }
+        val trustManagerFactory =
+            TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm()).apply {
+                init(null as KeyStore?)
+            }
+        val trustManager = trustManagerFactory.trustManagers.first() as X509TrustManager
+        val trustManagerExtensions = X509TrustManagerExtensions(trustManager)
+        val authType = peer.firstOrNull()?.publicKey?.algorithm ?: "RSA"
+        val cleaned =
+            trustManagerExtensions.checkServerTrusted(peer.toTypedArray(), authType, url.host)
+        val cleanedFingerprint = cleaned.map { fingerprintHex(it, algorithm) }
+        val allFingerprints = (peerFingerprints + cleanedFingerprint).toSet()
+        return allFingerprints
     }
 
-    private fun createSocketFactory(protocols: List<String>) =
-        SSLContext.getInstance(protocols[0]).apply {
-            val trustAllCerts = arrayOf<TrustManager>(object : X509TrustManager {
-                override fun getAcceptedIssuers(): Array<X509Certificate> = arrayOf()
-                override fun checkClientTrusted(certs: Array<X509Certificate>, authType: String) = Unit
-                override fun checkServerTrusted(certs: Array<X509Certificate>, authType: String) = Unit
-            })
-            init(null, trustAllCerts, SecureRandom())
-        }.socketFactory
+    private fun normalizeFingerprints(fps: List<String>): Set<String> =
+        fps.map { it.uppercase().replace(Regex("[^A-F0-9]"), "") }.toSet()
 
-    private fun hashString(type: String, input: ByteArray) =
-            MessageDigest
-                    .getInstance(type)
-                    .digest(input)
-                    .map { String.format("%02X", it) }
-                    .joinToString(separator = "")
+    @Throws(NoSuchAlgorithmException::class, CertificateEncodingException::class)
+    private fun fingerprintHex(cert: X509Certificate, algo: String): String =
+        MessageDigest.getInstance(algo)
+            .digest(cert.encoded)
+            .joinToString("") { "%02X".format(it) }
 
+    @Throws(CertificateException::class, NoSuchAlgorithmException::class)
+    private fun anyCertInChainMatches(
+        url: URL,
+        conn: HttpsURLConnection,
+        algo: String,
+        allowed: Set<String>
+    ): Boolean {
+        val peer = conn.serverCertificates.map { it as X509Certificate }
+        val peerFps = peer.map { fingerprintHex(it, algo) }
 
-    override fun onDetachedFromEngine(@NonNull binding: FlutterPlugin.FlutterPluginBinding) {
+        val tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm()).apply {
+            init(null as KeyStore?)
+        }
+        val tm = tmf.trustManagers.first { it is X509TrustManager } as X509TrustManager
+        val ext = X509TrustManagerExtensions(tm)
+        val authType = peer.firstOrNull()?.publicKey?.algorithm ?: "RSA"
+        val cleaned = ext.checkServerTrusted(peer.toTypedArray(), authType, url.host)
+        val cleanedFps = cleaned.map { fingerprintHex(it, algo) }
+
+        val allFps = (peerFps + cleanedFps).toSet()
+        return allFps.any { it in allowed }
+    }
+
+    private fun createSocketFactory(protocols: List<String>): SSLSocketFactory {
+        val sslContext: SSLContext = SSLContext.getInstance(protocols.first())
+        val trustManagerFactory: TrustManagerFactory =
+            TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm())
+        trustManagerFactory.init(null as KeyStore?)
+        sslContext.init(null, trustManagerFactory.trustManagers, SecureRandom())
+        return sslContext.socketFactory
+    }
+
+    override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         channel.setMethodCallHandler(null)
     }
 }
