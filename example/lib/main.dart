@@ -117,6 +117,14 @@ class _MyAppState extends State<MyApp> {
                           DropdownMenuItem(
                             child: Text(SHA.SHA256.toString()),
                             value: SHA.SHA256,
+                          ),
+                          DropdownMenuItem(
+                            child: Text(SHA.SHA384.toString()),
+                            value: SHA.SHA384,
+                          ),
+                          DropdownMenuItem(
+                            child: Text(SHA.SHA512.toString()),
+                            value: SHA.SHA512,
                           )
                         ],
                         value: _data.sha,

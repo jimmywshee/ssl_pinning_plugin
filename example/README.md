@@ -2,7 +2,7 @@
 
 Plugin for check SSL Pinning on request HTTP.
 
-Checks the equality between the known SHA-1 or SHA-256 fingerprint and the SHA-1 or SHA-256 of the target server.
+Checks the equality between the known SHA-1, SHA-256, SHA-384, or SHA-512 fingerprint and the SHA-1, SHA-256, SHA-384, or SHA-512 of the target server.
 
 ## Getting Started
 
@@ -17,7 +17,7 @@ For help on editing plugin code, view the [documentation](https://flutter.io/pla
 
 - serveurUrl : `String`
 - headerHttp : `Map<String, String>`
-- sha : `SHA` enum [SHA.SHA1 || SHA.SHA256]
+- sha : `SHA` enum [SHA.SHA1 || SHA.SHA256 || SHA.SHA384 || SHA.SHA512]
 - allowedSHAFingerprints : `List<String>`
 - timeout : `int`
 

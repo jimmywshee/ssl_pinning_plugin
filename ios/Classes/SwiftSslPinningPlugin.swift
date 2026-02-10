@@ -105,9 +105,17 @@ public class SwiftSslPinningPlugin: NSObject, FlutterPlugin {
             })
             
             func fingerprintHex(of data: Data, type: String) -> String {
-                if type == "SHA1" {
+                let normalized = type.uppercased().replacingOccurrences(of: "-", with: "")
+                switch normalized {
+                case "SHA1":
                     return data.sha1().toHexString().uppercased()
-                } else {
+                case "SHA256":
+                    return data.sha256().toHexString().uppercased()
+                case "SHA384":
+                    return data.sha384().toHexString().uppercased()
+                case "SHA512":
+                    return data.sha512().toHexString().uppercased()
+                default:
                     return data.sha256().toHexString().uppercased()
                 }
             }
