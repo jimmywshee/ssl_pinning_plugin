@@ -1,3 +1,7 @@
+## [Unreleased]
+
+* Add support for SHA-384 and SHA-512 fingerprints.
+
 ## [2.0.0] - 06/04/2021
 
 * Update to Flutter 2.0 with dart 2.12.0

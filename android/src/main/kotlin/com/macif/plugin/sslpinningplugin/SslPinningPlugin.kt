@@ -138,9 +138,20 @@ class SslPinningPlugin : MethodCallHandler, FlutterPlugin {
     private fun normalizeFingerprints(fps: List<String>): Set<String> =
         fps.map { it.uppercase().replace(Regex("[^A-F0-9]"), "") }.toSet()
 
+    private fun normalizeAlgorithm(algo: String): String {
+        val normalized = algo.uppercase().replace("-", "")
+        return when (normalized) {
+            "SHA1" -> "SHA-1"
+            "SHA256" -> "SHA-256"
+            "SHA384" -> "SHA-384"
+            "SHA512" -> "SHA-512"
+            else -> algo
+        }
+    }
+
     @Throws(NoSuchAlgorithmException::class, CertificateEncodingException::class)
     private fun fingerprintHex(cert: X509Certificate, algo: String): String =
-        MessageDigest.getInstance(algo)
+        MessageDigest.getInstance(normalizeAlgorithm(algo))
             .digest(cert.encoded)
             .joinToString("") { "%02X".format(it) }
 

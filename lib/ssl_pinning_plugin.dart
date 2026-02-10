@@ -2,8 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/services.dart';
 
-// Values of SHA (SHA1 or SHA256)
-enum SHA { SHA1, SHA256 }
+// Values of SHA (SHA1, SHA256, SHA384, SHA512)
+enum SHA { SHA1, SHA256, SHA384, SHA512 }
 // Values of verb HTTP supported (GET, HEAD)
 enum HttpMethod { Get, Head }
 
